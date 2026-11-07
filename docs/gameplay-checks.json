@@ -1,0 +1,406 @@
+{
+  "suite": "Robot Rescue Level 1 runtime",
+  "passed": true,
+  "checks": [
+    {
+      "name": "reference_gear_opens_settings_and_pauses",
+      "passed": true
+    },
+    {
+      "name": "guidance_remains_accessible_from_settings",
+      "passed": true
+    },
+    {
+      "name": "wrong_limb_rejected",
+      "passed": true
+    },
+    {
+      "name": "early_lever_blocked",
+      "passed": true
+    },
+    {
+      "name": "successful_limb_plays_mechanism",
+      "passed": true
+    },
+    {
+      "name": "limbs_any_order_open_chest",
+      "passed": true
+    },
+    {
+      "name": "head_locked_until_wiring",
+      "passed": true
+    },
+    {
+      "name": "wrong_gear_size_rejected",
+      "passed": true
+    },
+    {
+      "name": "gear_attachment_plays_user_audio",
+      "passed": true
+    },
+    {
+      "name": "gear_pair_stage_gate",
+      "passed": true
+    },
+    {
+      "name": "motor_stage_gate",
+      "passed": true
+    },
+    {
+      "name": "backward_battery_rejected",
+      "passed": true
+    },
+    {
+      "name": "battery_stage_gate",
+      "passed": true
+    },
+    {
+      "name": "cross_polarity_rejected",
+      "passed": true
+    },
+    {
+      "name": "wrong_wire_type_rejected",
+      "passed": true
+    },
+    {
+      "name": "one_wire_not_enough",
+      "passed": true
+    },
+    {
+      "name": "valid_wire_survives_error",
+      "passed": true
+    },
+    {
+      "name": "two_wires_unlock_head",
+      "passed": true
+    },
+    {
+      "name": "connected_battery_plays_motor",
+      "passed": true
+    },
+    {
+      "name": "head_attachment_plays_user_audio",
+      "passed": true
+    },
+    {
+      "name": "assembly_triggers_lightning_and_sparks",
+      "passed": true
+    },
+    {
+      "name": "all_components_ready",
+      "passed": true
+    },
+    {
+      "name": "assembly_creates_emissive_3d_filaments",
+      "passed": true
+    },
+    {
+      "name": "reduced_motion_suppresses_electrical_arcs",
+      "passed": true
+    },
+    {
+      "name": "electrical_arcs_clean_up_after_effect",
+      "passed": true
+    },
+    {
+      "name": "short_lever_drag_returns_safely",
+      "passed": true
+    },
+    {
+      "name": "full_pointer_lever_drag_releases",
+      "passed": true
+    },
+    {
+      "name": "valid_lever_releases",
+      "passed": true
+    },
+    {
+      "name": "lever_rest_pose_stays_attached",
+      "passed": true
+    },
+    {
+      "name": "lever_pulled_pose_stays_attached",
+      "passed": true
+    },
+    {
+      "name": "lever_starts_coming_alive",
+      "passed": true
+    },
+    {
+      "name": "yay_waits_for_coming_alive",
+      "passed": true
+    },
+    {
+      "name": "yay_follows_coming_alive",
+      "passed": true
+    },
+    {
+      "name": "completion_rewards_once",
+      "passed": true
+    },
+    {
+      "name": "duplicate_completion_no_reward",
+      "passed": true
+    },
+    {
+      "name": "replay_preserves_earnings",
+      "passed": true
+    },
+    {
+      "name": "monitor_wrong_draft_cannot_send",
+      "passed": true
+    },
+    {
+      "name": "monitor_undo_removes_track",
+      "passed": true
+    },
+    {
+      "name": "pointer_red_drag_records_and_connects",
+      "passed": true
+    },
+    {
+      "name": "pointer_black_tap_autoselects_and_connects",
+      "passed": true
+    },
+    {
+      "name": "monitor_drawing_does_not_power_robot",
+      "passed": true
+    },
+    {
+      "name": "four_separate_tracks_are_safe",
+      "passed": true
+    },
+    {
+      "name": "crossing_tracks_block_test",
+      "passed": true
+    },
+    {
+      "name": "near_touching_tracks_block_test",
+      "passed": true
+    },
+    {
+      "name": "monitor_send_waits_for_test_pulse",
+      "passed": true
+    },
+    {
+      "name": "monitor_send_powers_robot_after_test",
+      "passed": true
+    },
+    {
+      "name": "full_replay_no_duplicate_xp",
+      "passed": true
+    },
+    {
+      "name": "all_user_audio_assets_load",
+      "passed": true
+    },
+    {
+      "name": "dance_uses_party_music",
+      "passed": true
+    },
+    {
+      "name": "dance_lasso_differs_from_riding",
+      "passed": true
+    },
+    {
+      "name": "dance_moves_whole_robot",
+      "passed": true
+    },
+    {
+      "name": "reduced_motion_suppresses_dance",
+      "passed": true
+    },
+    {
+      "name": "release_stops_background_for_cheer",
+      "passed": true
+    },
+    {
+      "name": "background_resumes_after_dance",
+      "passed": true
+    },
+    {
+      "name": "interrupted_release_resumes_ready_without_duplicate_xp",
+      "passed": true
+    },
+    {
+      "name": "profile_and_preferences_persist",
+      "passed": true
+    },
+    {
+      "name": "partial_wiring_checkpoint_restores",
+      "passed": true
+    },
+    {
+      "name": "inconsistent_checkpoint_recovers_to_earliest_stage",
+      "passed": true
+    },
+    {
+      "name": "guided_mode_points_to_first_missing_pad",
+      "passed": true
+    },
+    {
+      "name": "challenge_guard_blocks_straight_track",
+      "passed": true
+    },
+    {
+      "name": "keyboard_detour_clears_challenge_guard",
+      "passed": true
+    },
+    {
+      "name": "heavier_delivery_rejects_weak_gearing",
+      "passed": true
+    },
+    {
+      "name": "stronger_gearing_lifts_cargo_and_unlocks_parcel",
+      "passed": true
+    },
+    {
+      "name": "reversed_pump_wire_does_not_water",
+      "passed": true
+    },
+    {
+      "name": "correct_pump_wiring_waters_and_unlocks_sprout",
+      "passed": true
+    },
+    {
+      "name": "robot_styles_and_unlocks_persist",
+      "passed": true
+    },
+    {
+      "name": "collection_replay_queues_dance_moves_in_order",
+      "passed": true
+    },
+    {
+      "name": "dance_player_triggers_confetti",
+      "passed": true
+    },
+    {
+      "name": "level_two_unlocks_after_first_rescue",
+      "passed": true
+    },
+    {
+      "name": "car_battery_waits_for_wheels",
+      "passed": true
+    },
+    {
+      "name": "four_car_wheels_fit",
+      "passed": true
+    },
+    {
+      "name": "car_battery_and_test_drive_complete",
+      "passed": true
+    },
+    {
+      "name": "car_progress_survives_reload",
+      "passed": true
+    },
+    {
+      "name": "car_replay_resets_only_car_progress",
+      "passed": true
+    },
+    {
+      "name": "car_returns_to_level_selection",
+      "passed": true
+    },
+    {
+      "name": "level_two_locked_until_level_one_clear",
+      "passed": true
+    },
+    {
+      "name": "level_selection_shows_loading_screen",
+      "passed": true
+    },
+    {
+      "name": "unlocked_level_two_starts_fresh",
+      "passed": true
+    },
+    {
+      "name": "car_wrong_drop_returns_tyre_to_rack",
+      "passed": true
+    },
+    {
+      "name": "car_pointer_drag_drop_fits_tyre",
+      "passed": true
+    },
+    {
+      "name": "engine_requires_alignment_before_cylinders",
+      "passed": true
+    },
+    {
+      "name": "engine_outside_drop_keeps_unsolved_order",
+      "passed": true
+    },
+    {
+      "name": "engine_accepts_three_cylinders_in_order",
+      "passed": true
+    },
+    {
+      "name": "car_lever_waits_for_power_and_headlights",
+      "passed": true
+    },
+    {
+      "name": "car_headlights_release_and_forward_control",
+      "passed": true
+    },
+    {
+      "name": "car_has_hydraulic_lift_and_detailed_battery",
+      "passed": true
+    },
+    {
+      "name": "removed_release_button_has_no_hit_target",
+      "passed": true
+    },
+    {
+      "name": "car_short_physical_lever_pull_does_not_release",
+      "passed": true
+    },
+    {
+      "name": "car_full_physical_lever_pull_starts_lift",
+      "passed": true
+    },
+    {
+      "name": "hydraulic_lowering_has_midpoint",
+      "passed": true
+    },
+    {
+      "name": "car_celebration_wheelie_starts_after_lowering",
+      "passed": true
+    },
+    {
+      "name": "car_celebration_finishes_and_returns_to_driving",
+      "passed": true
+    },
+    {
+      "name": "stacked_left_forward_button_drives",
+      "passed": true
+    },
+    {
+      "name": "car_paint_and_headlight_controls_work",
+      "passed": true
+    },
+    {
+      "name": "return_to_menu_preserves_level_unlocks",
+      "passed": true
+    },
+    {
+      "name": "replayed_car_level_resets_repair_preserves_style_and_completion",
+      "passed": true
+    },
+    {
+      "name": "settings_main_menu_clears_gameplay_overlay",
+      "passed": true
+    },
+    {
+      "name": "main_menu_play_opens_level_selector",
+      "passed": true
+    },
+    {
+      "name": "selected_level_one_starts_at_first_repair",
+      "passed": true
+    },
+    {
+      "name": "level_unlocks_and_completion_survive_save_reload",
+      "passed": true
+    }
+  ]
+}

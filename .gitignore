@@ -1,0 +1,21 @@
+# Unreal generated files and local state
+Binaries/
+DerivedDataCache/
+Intermediate/
+Saved/
+Builds/
+.vs/
+.vscode/
+*.sln
+*.suo
+*.VC.db
+*.pdb
+*.log
+*.tmp
+*.zip
+# Credentials and local overrides
+.env
+.env.*
+!.env.example
+*.pem
+*.key

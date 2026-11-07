@@ -1,0 +1,2 @@
+using UnrealBuildTool;
+public class RobotRescue : ModuleRules { public RobotRescue(ReadOnlyTargetRules Target) : base(Target) { PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs; PublicDependencyModuleNames.AddRange(new string[]{"Core","CoreUObject","Engine","InputCore","Slate","SlateCore","ProceduralMeshComponent"}); } }
