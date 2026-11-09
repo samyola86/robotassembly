@@ -1,6 +1,9 @@
 #include "RescueGame.h"
+#include "Components/AudioComponent.h"
+#include "Sound/SoundWave.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/PointLightComponent.h"
+#include "Components/SpotLightComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Engine/StaticMesh.h"
 
@@ -19,7 +22,7 @@ void ARescueWorld::BuildCarLevel(){
   Mesh->SetRelativeLocation(P);Mesh->SetRelativeRotation(FRotator(0,180,0));
   Mesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);Mesh->SetVisibility(false);Mesh->RegisterComponent();return Mesh;
  };
- auto* Body=Model(TEXT("ZipBody"),FVector(0,0,270));
+ auto* Body=Model(TEXT("ZipRuggedBody"),FVector(0,0,270));
  Body->SetRelativeRotation(FRotator(0,155,0));
  CarBody.Add(Body);CarBodyRest.Add(FVector(0,0,270));
  for(int I=0;I<Body->GetNumMaterials();I++){
@@ -27,7 +30,7 @@ void ARescueWorld::BuildCarLevel(){
   if(Base->GetName().Contains(TEXT("HeroPaint")))CarPaintMaterials.Add(Body->CreateDynamicMaterialInstance(I));
   if(Base->GetName().Contains(TEXT("HeroGlow")))CarLampMaterials.Add(Body->CreateDynamicMaterialInstance(I));
  }
- for(int I=0;I<4;I++)CarWheels.Add(Model(TEXT("ZipTire"),Racks[I]));
+ for(int I=0;I<4;I++)CarWheels.Add(Model(TEXT("ZipRuggedTire"),Racks[I]));
  CarBattery=Model(TEXT("HeroBattery"),Racks[4]);CarBattery->SetVisibility(false);
  CarLiftDeck=Box(TEXT("Cube"),FVector(0,0,150),FVector(310,260,16),Chrome);
  CarLiftDeck->SetRelativeRotation(FRotator(0,-25,0));
@@ -35,7 +38,7 @@ void ARescueWorld::BuildCarLevel(){
   auto* Piston=Box(TEXT("Cylinder"),FVector(Side*65,0,72),FVector(28,28,144),Chrome);CarLiftPistons.Add(Piston);
   auto* Pad=Box(TEXT("Cube"),FVector(Side*55,0,176),FVector(35,100,36),Dark);CarLiftPads.Add(Pad);
  }
- for(int I=0;I<24;I++){
+ for(int I=0;I<4;I++){
   auto* Puff=Box(TEXT("Plane"),FVector::ZeroVector,FVector(40,40,40),Chrome,FRotator(0,0,90));
   auto* Mat=UMaterialInstanceDynamic::Create(LoadObject<UMaterialInterface>(nullptr,TEXT("/Game/Art/M_ZipSmoke.M_ZipSmoke")),this);
   Puff->SetMaterial(0,Mat);Puff->SetCastShadow(false);Puff->SetVisibility(false);CarSmoke.Add(Puff);CarSmokeMaterials.Add(Mat);
@@ -47,6 +50,8 @@ void ARescueWorld::BuildCarLevel(){
   Light->SetIntensity(1200);Light->SetAttenuationRadius(650);Light->SetSourceRadius(25);
   Light->SetCastShadows(false);Light->SetLightColor(Glow);Light->SetVisibility(false);Light->RegisterComponent();CarHeadlights.Add(Light);
  }
+ BuildDesertBay();
+ BuildZipBeacon();
 }
 
 void ARescueWorld::OpenCarLevel(){
@@ -67,12 +72,14 @@ void ARescueWorld::OpenCarLevel(){
 }
 
 void ARescueWorld::UpdateCarLevel(){
+ UpdateDesertBay();
+ UpdateZipBeacon();
  // Zip faces the camera, so forward motion travels toward the front of the room.
  const FVector Shift(CarTravel*.35f,-CarTravel,-158.f*CarReleaseProgress);
  const FQuat Tilt(FVector(.9063f,-.4226f,0),FMath::DegreesToRadians(-CarWheelieAngle));
  const FVector Pivot(27.5f,58.5f,198);
  auto Pose=[&](FVector P){return Pivot+Tilt.RotateVector(P-Pivot)+Shift;};
- const bool Celebrating=CarReleased&&CarTestTime>=0&&StageTime-CarTestTime<10.f;
+ const bool Celebrating=CarReleased&&CarTestTime>=0&&StageTime-CarTestTime<ZipCelebrationSeconds;
  const bool Lamps=CarLampOn&&(Reduced||!Celebrating||FMath::Fmod(StageTime-CarTestTime,.8f)<.55f);
  if(CarLiftDeck){CarLiftDeck->SetVisibility(CarMode);CarLiftDeck->SetRelativeLocation(FVector(0,0,150-158*CarReleaseProgress));}
  for(int I=0;I<CarLiftPistons.Num();I++){
@@ -80,12 +87,18 @@ void ARescueWorld::UpdateCarLevel(){
   CarLiftPistons[I]->SetVisibility(CarMode&&CarReleaseProgress<.995f);CarLiftPistons[I]->SetRelativeScale3D(FVector(.28f,.28f,H/100));CarLiftPistons[I]->SetRelativeLocation(FVector(I?65:-65,0,H/2));
   CarLiftPads[I]->SetVisibility(CarMode&&CarReleaseProgress<.995f);CarLiftPads[I]->SetRelativeScale3D(FVector(.35f,1.f,FMath::Max(.001f,.36f*(1-CarReleaseProgress))));CarLiftPads[I]->SetRelativeLocation(FVector(I?55:-55,0,158-158*CarReleaseProgress+18*(1-CarReleaseProgress)));
  }
+ const float DanceTime=StageTime-CarTestTime-ZipLiftSeconds;
+ // A short cluster of expanding sprites, followed by a gap, reads as a tailpipe puff.
  for(int I=0;I<CarSmoke.Num();I++){
-  const float T=StageTime-CarTestTime-2.f-I*.085f;
-  const float Age=T>=0?FMath::Fmod(T,2.05f):-1.f;
-  const bool Show=CarMode&&Celebrating&&!Reduced&&T>=0&&Age<1.8f;
+  const float Age=FMath::Fmod(FMath::Max(0.f,DanceTime),1.f)-I*.045f;
+  const bool Show=CarMode&&Celebrating&&!Reduced&&CarReleaseProgress>=1.f&&DanceTime>=0.f&&Age>=0.f&&Age<.65f;
   CarSmoke[I]->SetVisibility(Show);
-  if(Show){CarSmoke[I]->SetRelativeLocation(Pose(FVector(-105,95,190))+FVector(-Age*48,Age*42,Age*55+FMath::Sin(I*2.f)*7));CarSmoke[I]->SetRelativeScale3D(FVector((25+Age*45)/100));CarSmokeMaterials[I]->SetScalarParameterValue(TEXT("Opacity"),.24f*FMath::Sin(PI*Age/1.8f));}
+  if(!Show)continue;
+  const float Growth=Age/.65f;
+  const FVector Drift(-Age*85,Age*58,Age*66+I*3.f);
+  CarSmoke[I]->SetRelativeLocation(Pose(FVector(-105,95,190))+Drift);
+  CarSmoke[I]->SetRelativeScale3D(FVector(.22f+Growth*.54f));
+  CarSmokeMaterials[I]->SetScalarParameterValue(TEXT("Opacity"),.37f*FMath::Sin(PI*Growth));
  }
  for(int I=0;I<CarBody.Num();I++){
   auto* Mesh=CarBody[I];if(Mesh->IsVisible()!=CarMode)Mesh->SetVisibility(CarMode);
@@ -109,18 +122,19 @@ void ARescueWorld::UpdateCarLevel(){
   if(Visible){CarHeadlights[I]->SetRelativeLocation(Pose(FVector(I?45.f:-45.f,-110,295)));CarHeadlights[I]->SetLightColor(CarLook?FLinearColor(1.f,.55f,.09f):Glow);}
  }
  for(auto* M:CarLampMaterials)M->SetVectorParameterValue(TEXT("Color"),CarHead&&Lamps?(CarLook?FLinearColor(1.f,.55f,.09f):Glow):FLinearColor::Black);
- const FLinearColor Paint[]={FLinearColor(.72f,.76f,.75f),FLinearColor(.13f,.56f,.88f),FLinearColor(.96f,.38f,.10f),FLinearColor(.36f,.76f,.39f)};
- for(auto* M:CarPaintMaterials)M->SetVectorParameterValue(TEXT("Color"),Paint[CarPaintIndex%4]);
+ const FLinearColor Paint[]={FLinearColor(.95f,.52f,.035f),FLinearColor(.13f,.56f,.88f),FLinearColor(.96f,.38f,.10f),FLinearColor(.36f,.76f,.39f)};
+ for(auto* M:CarPaintMaterials){M->SetVectorParameterValue(TEXT("Color"),Paint[CarPaintIndex%4]);M->SetScalarParameterValue(TEXT("Roughness"),.43f);M->SetScalarParameterValue(TEXT("Metallic"),.05f);}
 }
 
 void ARescueWorld::FitCarPart(int32 Part){
  if(!CarMode)return;
  if(Part>=0&&Part<4){
   if(CarInstalled&(1<<Part))return;
-  CarInstalled|=1<<Part;PlayEffect(TEXT("LimbMechanism"));Say(TEXT("Wheel secured!"));
+  CarInstalled|=1<<Part;PlayEffect(TEXT("ZipAirWrench"));Say(TEXT("Wheel secured!"));
  }else if(Part==5){
   if((CarInstalled&15)!=15){Say(TEXT("Let's fit the four wheels first."));return;}
   CarEnginePlaced=true;CarEnginePuzzle=true;CarEngineAligned=false;CarEngineOffset=2;CarOrder[0]=3;CarOrder[1]=1;CarOrder[2]=2;CarCylinderDrag=-1;
+  PlayEffect(TEXT("ZipEngineFit"));
   Say(TEXT("Align the engine, then place cylinders one, two and three."));
  }else if(Part==4){
   if(CarCylinders<3){Say(TEXT("Finish the engine before fitting the battery."));return;}
@@ -140,8 +154,9 @@ void ARescueWorld::CarEngineClick(FVector2D P){
  if(Hit(P,510,475,180,50)){if(CarEngineAligned)return;CarEngineOffset=FMath::Max(-3,CarEngineOffset-1);return;}
  if(Hit(P,910,475,180,50)){if(CarEngineAligned)return;CarEngineOffset=FMath::Min(3,CarEngineOffset+1);return;}
  if(Hit(P,580,545,440,50)){
+  if(CarEngineAligned)return;
   if(CarEngineOffset!=0){Say(TEXT("Move the engine until the alignment marks meet."));return;}
-  CarEngineAligned=true;Save();Say(TEXT("Engine aligned. Swap the cylinders into one, two, three order."));return;
+  CarEngineAligned=true;PlayEffect(TEXT("ZipEngineFit"));Save();Say(TEXT("Engine aligned. Swap the cylinders into one, two, three order."));return;
  }
  for(int I=0;I<3;I++)if(Hit(P,730+I*150,345,110,100)){
   if(!CarEngineAligned){Say(TEXT("Align the engine first."));return;}
@@ -205,8 +220,8 @@ void ARescueWorld::CarClick(FVector2D P){
   if(Challenge&&WireStart>=0&&Hit(P,735,310,610,290))AddRouteWaypoint(P);
   return;
  }
- if(Hit(P,75,760,270,48)){ReturnToMenu();MenuPage=1;return;}
- if(Hit(P,390,760,300,48)){
+ if(CarReleased&&Hit(P,390,760,300,48)){
+  if(Cheer)Cheer->Stop();
   CarInstalled=0;CarComplete=false;CarEnginePlaced=false;CarEngineAligned=false;CarEnginePuzzle=false;CarCylinders=0;CarWired=false;CarHead=false;CarReleased=false;CarSelected=-1;Lever=0;CarTestTime=-1;CarWheelieAngle=0;CarTravel=CarTravelTarget=CarReleaseProgress=0;
   UpdateCarLevel();Save();Say(TEXT("Let's build Zip again!"));return;
  }
@@ -249,7 +264,7 @@ void ARescueWorld::CarKey(FKey K){
   if(K==EKeys::Enter||K==EKeys::SpaceBar){if(WireStart<0&&Focus<2){WireColor=Focus;WireStart=Focus;PenPoints={Terminal(Focus)};}else if(WireStart>=0&&Focus>=2)FinishTrack(Focus);}
   return;
  }
- if(K==EKeys::BackSpace){CarClick({100,780});return;}
+ if(K==EKeys::BackSpace){ReturnToMenu();MenuPage=1;return;}
  if(K==EKeys::R){CarClick({420,780});return;}
  if(K==EKeys::P){CarClick({750,780});return;}
  if(K==EKeys::F){CarClick({950,780});return;}
@@ -270,23 +285,96 @@ void ARescueWorld::CarKey(FKey K){
 }
 
 void ARescueHUD::DrawCarLevel(){
- Rect(470,80,660,125,Ink);Text(TEXT("LEVEL 2  /  ZIP'S RESCUE"),490,95,24,TextColor);
+ Rect(590,24,420,68,Ink);Rect(590,24,420,4,Amber);Rect(590,88,420,4,Amber);Text(TEXT("LEVEL 2  /  ZIP"),665,42,28,TextColor);
  FString Task=(W->CarInstalled&15)!=15?TEXT("Fit all four wheels."):!W->CarEnginePlaced?TEXT("Fit the engine."):W->CarCylinders<3?TEXT("Complete the engine monitor."):!(W->CarInstalled&16)?TEXT("Fit the battery."):!W->CarWired?TEXT("Wire battery to engine."):!W->CarHead?TEXT("Attach the headlight face."):!W->CarReleased?TEXT("Pull the lever to release Zip."):W->CarReleaseProgress<.99f?TEXT("Lowering the hydraulic lift..."):W->CarTestTime>=0?TEXT("Zip is celebrating! Watch the victory dance."):TEXT("Drive Zip around the workshop!");
- Text(Task,490,135,16,TextColor);
- Text(W->CarReleased?TEXT("Use the driving buttons or arrow keys."):TEXT("Drag parts to their sockets. Tab and Enter work too."),490,162,14,TextColor);
+ Rect(440,108,720,38,Ink);Text(Task,462,118,17,TextColor);
+ Text(W->CarReleased?TEXT("Use the driving buttons or arrow keys."):TEXT("Drag parts to their sockets. Tab and Enter work too."),490,151,14,TextColor);
  for(int I=0;I<7;I++){
   bool Available=I<4?!(W->CarInstalled&(1<<I)):I==4?W->CarCylinders==3&&!(W->CarInstalled&16):I==5?(W->CarInstalled&15)==15&&!W->CarEnginePlaced:W->CarWired&&!W->CarHead;
   if(!Available)continue;auto A=W->Screen(Racks[I]),B=W->Screen(Sockets[I]);Ring(A,30,W->CarSelected==I?Glow:Chrome,3);Ring(B,29,W->CarSelected==I?Glow:Chrome,3);
   if(I==6){Ring(A+FVector2D(-14,-3),6,Glow,3);Ring(A+FVector2D(14,-3),6,Glow,3);}
 
  }
- Button(TEXT("BACK TO LEVELS"),75,760,270);Button(TEXT("REPAIR AGAIN [R]"),390,760,300);
+ if(W->CarReleased)Button(TEXT("REPAIR AGAIN [R]"),390,760,300);
  Button(TEXT("PAINT [P]"),720,760,180);Button(TEXT("LOOK [F]"),920,760,180);
  if(W->CarEnginePlaced&&W->CarCylinders<3)Button(TEXT("OPEN ENGINE [E]"),1200,760,300);
  if((W->CarInstalled&16)&&!W->CarWired)Button(TEXT("OPEN WIRING"),1200,760,300);
 
  if(W->CarReleased){Button(TEXT("BACK [LEFT]"),75,280,250);Button(TEXT("FORWARD [RIGHT]"),75,345,250);Button(TEXT("HORN [H]"),75,410,250);Button(TEXT("LIGHTS [B]"),75,475,250);}
  if(W->CarEnginePuzzle)DrawCarEngine();
+}
+
+bool ARescueWorld::IsZipDancing() const{
+ const float Elapsed=StageTime-CarTestTime;
+ return CarMode&&CarReleased&&CarTestTime>=0.f&&CarReleaseProgress>=1.f&&Elapsed>=ZipLiftSeconds&&Elapsed<ZipCelebrationSeconds;
+}
+
+void ARescueWorld::BuildZipBeacon(){
+ ZipBeaconRig=NewObject<USceneComponent>(this);
+ ZipBeaconRig->SetupAttachment(RootComponent);
+ ZipBeaconRig->RegisterComponent();
+
+ ZipBeaconRotor=NewObject<USceneComponent>(this);
+ ZipBeaconRotor->SetupAttachment(ZipBeaconRig);
+ ZipBeaconRotor->RegisterComponent();
+
+ auto AddPiece=[&](USceneComponent* Parent,const TCHAR* Shape,FVector Position,FVector Size,FLinearColor Color,bool Emissive=false){
+  auto* Piece=Box(Shape,Position,Size,Color,FRotator::ZeroRotator,Emissive);
+  Piece->AttachToComponent(Parent,FAttachmentTransformRules::KeepRelativeTransform);
+  Piece->SetCastShadow(false);
+  return Piece;
+ };
+ AddPiece(ZipBeaconRig,TEXT("Cylinder"),FVector(0,0,-19),FVector(91,91,14),Dark);
+ AddPiece(ZipBeaconRig,TEXT("Cylinder"),FVector(0,0,-12),FVector(84,84,5),Chrome);
+ AddPiece(ZipBeaconRig,TEXT("Cylinder"),FVector(0,0,46),FVector(27,27,10),Chrome);
+ AddPiece(ZipBeaconRotor,TEXT("Sphere"),FVector(0,0,9),FVector(15,15,25),FLinearColor(1.f,.19f,.07f),true);
+ AddPiece(ZipBeaconRotor,TEXT("Sphere"),FVector(-8,0,9),FVector(14,46,36),Chrome);
+ auto* Lens=AddPiece(ZipBeaconRig,TEXT("Sphere"),FVector(0,0,12),FVector(80,80,71),FLinearColor(.45f,.01f,.018f));
+ if(auto* Material=LoadObject<UMaterialInterface>(nullptr,TEXT("/Game/Art/M_ZipBeaconLens.M_ZipBeaconLens"))){
+  Lens->SetMaterial(0,Material);
+ }
+ ZipBeaconCable=Box(TEXT("Cylinder"),FVector::ZeroVector,FVector(3,3,100),Chrome);
+ ZipBeaconCable->SetVisibility(false);
+ ZipBeaconRig->SetVisibility(false,true);
+
+ ZipBeaconBeam=NewObject<USpotLightComponent>(this);
+ ZipBeaconBeam->SetupAttachment(RootComponent);
+ ZipBeaconBeam->SetIntensityUnits(ELightUnits::Candelas);
+ ZipBeaconBeam->SetAttenuationRadius(1000.f);
+ ZipBeaconBeam->SetInnerConeAngle(9.f);
+ ZipBeaconBeam->SetOuterConeAngle(19.f);
+ ZipBeaconBeam->SetLightColor(FLinearColor(1.f,.027f,.045f));
+ ZipBeaconBeam->SetCastShadows(false);
+ ZipBeaconBeam->SetVisibility(false);
+ ZipBeaconBeam->RegisterComponent();
+}
+
+void ARescueWorld::UpdateZipBeacon(){
+ if(!ZipBeaconRig)return;
+ const bool Dancing=IsZipDancing();
+ if(ZipBeaconRig->IsVisible()!=Dancing){
+  ZipBeaconRig->SetVisibility(Dancing,true);
+  ZipBeaconCable->SetVisibility(Dancing);
+  ZipBeaconBeam->SetVisibility(Dancing);
+ }
+ if(!Dancing)return;
+
+ const float DanceTime=StageTime-CarTestTime-ZipLiftSeconds;
+ const float Drop=Reduced?1.f:FMath::SmoothStep(0.f,1.f, FMath::Clamp(DanceTime/.85f,0.f,1.f));
+ const FVector RigPosition(0,-20,FMath::Lerp(630.f,434.f,Drop));
+ ZipBeaconRig->SetRelativeLocation(RigPosition);
+ const float CableLength=FMath::Max(1.f,682.f-RigPosition.Z-50.f);
+ ZipBeaconCable->SetRelativeLocation(RigPosition+FVector(0,0,50.f+CableLength*.5f));
+ ZipBeaconCable->SetRelativeScale3D(FVector(.03f,.03f,CableLength/100.f));
+
+ const float Angle=Reduced?-.8f:DanceTime*2.5f-.8f;
+ const FVector Direction(FMath::Cos(Angle),FMath::Sin(Angle),0);
+ ZipBeaconRotor->SetRelativeRotation(Direction.Rotation());
+ const FVector Lamp=RigPosition+FVector(0,0,9.f)+Direction*27.f;
+ const FVector Aim=Direction*420.f+FVector(0,0,-340.f);
+ ZipBeaconBeam->SetRelativeLocation(Lamp);
+ ZipBeaconBeam->SetRelativeRotation(Aim.Rotation());
+ ZipBeaconBeam->SetIntensity(Reduced?3200.f:20000.f*Drop);
 }
 
 void ARescueWorld::ReleaseCar(){
@@ -298,15 +386,22 @@ void ARescueWorld::ReleaseCar(){
 void ARescueWorld::TickCar(float Dt){
  if(!CarMode||!CarReleased)return;
  const float T=StageTime-CarTestTime;
- CarReleaseProgress=Reduced?1.f:FMath::Clamp(CarReleaseProgress+Dt/2.f,0.f,1.f);
+ CarReleaseProgress=Reduced?1.f:FMath::Clamp(CarReleaseProgress+Dt/ZipLiftSeconds,0.f,1.f);
  CarWheelieAngle=0;
- if(CarTestTime>=0&&T<10.f){
-  const float CueTimes[]={2.f,4.1f,5.f,7.f,8.f};
-  const TCHAR* Cues[]={TEXT("ZipRev"),TEXT("ZipHorn"),TEXT("ZipRev"),TEXT("ZipHorn"),TEXT("Yay")};
-  while(CarCelebrationCue<5&&T>=CueTimes[CarCelebrationCue])PlayEffect(Cues[CarCelebrationCue++]);
-  if(!Reduced&&T>2.f){
-   CarTravelTarget=FMath::Sin((T-2)*1.7f)*65.f;
-   float Phase=FMath::Fmod(T-2,3.f);
+ if(CarTestTime>=0&&T<ZipCelebrationSeconds){
+  if(CarCelebrationCue==0&&CarReleaseProgress>=1.f&&T>=ZipLiftSeconds){
+   Cheer->SetSound(LoadObject<USoundWave>(nullptr,TEXT("/Game/Audio/ZipEngineStart.ZipEngineStart")));
+   Cheer->Play();
+   ++CarCelebrationCue;
+  }
+  const float CueTimes[]={0.f,4.1f,7.f,ZipCelebrationSeconds-2.f};
+  const TCHAR* Cues[]={nullptr,TEXT("ZipHorn"),TEXT("ZipHorn"),TEXT("Yay")};
+  while(CarCelebrationCue>0&&CarCelebrationCue<UE_ARRAY_COUNT(CueTimes)&&T>=CueTimes[CarCelebrationCue]){
+   PlayEffect(Cues[CarCelebrationCue++]);
+  }
+  if(!Reduced&&T>ZipLiftSeconds){
+   CarTravelTarget=FMath::Sin((T-ZipLiftSeconds)*1.7f)*65.f;
+   float Phase=FMath::Fmod(T-ZipLiftSeconds,3.f);
    CarWheelieAngle=Phase<1.4f?24.f*FMath::Square(FMath::Sin(PI*Phase/1.4f)):0.f;
   }
  }else if(CarTestTime>=0){CarTestTime=-1;CarTravelTarget=0;Say(TEXT("That was fun! Your turn to drive."));}

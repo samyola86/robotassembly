@@ -7,8 +7,10 @@ A Windows Unreal Engine 5.8 engineering game for children aged 5–10. Build a r
 ## What is included
 
 - **Level 1:** fit limbs, gears, motor and battery; draw red positive and black negative PCB connections; attach the head; pull the lever and celebrate with a dance.
-- **Level 2:** drag tyres onto Zip, align the engine and swap cylinders into order, wire the battery, attach headlights, lower the hydraulic lift and celebrate with revs, wheelies, exhaust, horn calls and blinking lights.
+- **Level 2:** drag tyres onto Zip, align the engine and swap cylinders into order, wire the battery, attach headlights, lower the hydraulic lift and celebrate with revs, wheelies, exhaust puffs, horn calls and a descending red beacon. Zip repairs take place in a desert scrapyard workshop.
 - Illustrated main menu, level selection, loading transition, settings, reduced motion, local unlocks and customisations.
+- Both levels have subtle wall doodles, portrait dialogue panels and distinct offline robot voices. Music and effects soften during dialogue.
+- “Running on Waves” plays through the menus and loading screen and accompanies Zip’s 13-second dance. Level 1 uses “Fun” in the workshop and a separate song for Bolt’s 19-second dance.
 - Level 1 starts unlocked. Completing it unlocks Level 2. Selecting either level always starts a fresh repair while retaining unlocks and styles.
 
 This repository includes the C++ source, project configuration, workshop map and imported Unreal assets. It does **not** include Unreal Engine, a prebuilt executable, generated caches or personal save files. Game Foundry is not needed to build or play this checkout.
@@ -70,13 +72,13 @@ Or build the editor target, double-click `RobotRescue.uproject`, open `/Game/Wor
 3. On the wiring monitor, draw two red branches from **+** to the chip's **A** pads and two black branches from **−** to its **B** pads. Keep routes apart, **Test Circuit**, then **Send to Robot**.
 4. In Zip's engine puzzle, match the horizontal lines, press **Align Engine**, then drag cylinders onto one another to swap them into **1, 2, 3** order. Keyboard: left/right adjust alignment, **A** confirms, and **1/2/3** pick a cylinder and its swap destination.
 5. Pull the physical lever down once assembly is complete. Zip's driving controls are stacked on the left; arrows drive, **H** honks and **B** toggles lights. **P** changes paint and **F** changes headlight colour.
-6. Open the gear/settings button or press **F1** for sound, reduced motion and **Main Menu**. **Escape** pauses/resumes gameplay; **F2** toggles reduced motion.
+6. The upper-left back arrow returns to level selection. Open the upper-right gear or press **F1** for sound, reduced motion and **Main Menu**. **Escape** pauses or resumes gameplay. **F2** toggles reduced motion.
 
 A nickname is optional. Progress and preferences stay local; there is no game account or network requirement. Returning to a level starts a new assembly instead of restoring its ending.
 
 ## Verification
 
-The source snapshot uploaded here passed **100 packaged runtime gameplay checks**. The receipt is in [docs/gameplay-checks.json](docs/gameplay-checks.json). This is local verification on the development machine, not a GitHub Actions CI result.
+The source snapshot uploaded here passed **108 packaged runtime gameplay checks**. The receipt is in [docs/gameplay-checks.json](docs/gameplay-checks.json). This is local verification on the development machine, not a GitHub Actions CI result.
 
 After building, run the same in-game suite in an isolated save directory:
 

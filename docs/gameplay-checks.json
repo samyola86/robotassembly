@@ -311,7 +311,23 @@
       "passed": true
     },
     {
+      "name": "loading_screen_uses_running_on_waves",
+      "passed": true
+    },
+    {
       "name": "unlocked_level_two_starts_fresh",
+      "passed": true
+    },
+    {
+      "name": "zip_uses_its_prerecorded_robot_voice",
+      "passed": true
+    },
+    {
+      "name": "level_two_uses_separate_desert_environment",
+      "passed": true
+    },
+    {
+      "name": "rugged_zip_body_and_treaded_tyres_loaded",
       "passed": true
     },
     {
@@ -367,6 +383,10 @@
       "passed": true
     },
     {
+      "name": "zip_dance_continues_past_previous_end",
+      "passed": true
+    },
+    {
       "name": "car_celebration_finishes_and_returns_to_driving",
       "passed": true
     },
@@ -396,6 +416,18 @@
     },
     {
       "name": "selected_level_one_starts_at_first_repair",
+      "passed": true
+    },
+    {
+      "name": "bolt_uses_its_prerecorded_robot_voice",
+      "passed": true
+    },
+    {
+      "name": "returning_to_level_one_restores_original_workshop",
+      "passed": true
+    },
+    {
+      "name": "level_one_back_arrow_returns_to_selector",
       "passed": true
     },
     {

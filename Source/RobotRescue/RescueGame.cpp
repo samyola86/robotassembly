@@ -18,6 +18,7 @@
 #include "Components/SkyLightComponent.h"
 #include "Components/DirectionalLightComponent.h"
 #include "Engine/Canvas.h"
+#include "CanvasItem.h"
 #include "Engine/TextureCube.h"
 #include "Engine/Texture2D.h"
 #include "Engine/ExponentialHeightFog.h"
@@ -97,6 +98,76 @@ static void PaintedQuad(AActor* Owner,FVector A,FVector B,FVector C,FVector D,FL
  TArray<FVector> V={A,B,C,D},N={FVector(0,-1,0),FVector(0,-1,0),FVector(0,-1,0),FVector(0,-1,0)};TArray<int32> T={0,2,1,0,3,2};TArray<FVector2D> UV={FVector2D(0,0),FVector2D(1,0),FVector2D(1,1),FVector2D(0,1)};TArray<FLinearColor> Colors;TArray<FProcMeshTangent> Tangents;
  M->CreateMeshSection_LinearColor(0,V,T,N,UV,Colors,Tangents,false);M->SetMaterial(0,Material(Owner,Color,false));
 }
+void ARescueWorld::BuildWallDoodles(bool Desert){
+ const TArray<FVector2D> Heart={
+  {0,-.88},{-.32,-.56},{-.73,-.18},{-.94,.23},{-.9,.55},{-.68,.79},
+  {-.37,.8},{-.08,.59},{0,.43},{.18,.67},{.43,.82},{.73,.7},
+  {.9,.39},{.85,.08},{.55,-.32},{0,-.88}
+ };
+ TArray<FVector2D> Star;
+ TArray<FVector2D> Swirl;
+ for(int32 I=0;I<=10;++I){
+  const float Angle=PI*.5f+I*PI/5.f;
+  const float Radius=I%2==0?1.f:.41f;
+  Star.Add(FVector2D(FMath::Cos(Angle),FMath::Sin(Angle))*Radius);
+ }
+ for(int32 I=0;I<=36;++I){
+  const float T=I/36.f;
+  const float Angle=T*PI*4.4f;
+  Swirl.Add(FVector2D(FMath::Cos(Angle),FMath::Sin(Angle))*(.09f+.88f*T));
+ }
+
+ auto Paint=[&](const TArray<FVector2D>& Path,FVector Center,float Size,FLinearColor Color,int32 Seed,float Yaw=0.f){
+  TArray<FVector> Vertices;
+  TArray<int32> Indices;
+  TArray<FVector> Normals;
+  TArray<FVector2D> UVs;
+  FRandomStream Random(Seed);
+  const FRotator Facing(0,Yaw,0);
+  auto Point=[&](FVector2D Offset){return Center+Facing.RotateVector(FVector(Offset.X,0,Offset.Y));};
+  for(int32 I=1;I<Path.Num();++I){
+   const FVector2D A=Path[I-1]*Size;
+   const FVector2D B=Path[I]*Size;
+   const FVector2D Delta=(B-A).GetSafeNormal();
+   const FVector2D Side=FVector2D(-Delta.Y,Delta.X)*Random.FRandRange(1.15f,2.05f);
+   const int32 Base=Vertices.Num();
+   Vertices.Append({Point(A-Side-Delta),Point(B-Side+Delta),Point(B+Side+Delta),Point(A+Side-Delta)});
+   Indices.Append({Base,Base+2,Base+1,Base,Base+3,Base+2});
+   for(int32 Corner=0;Corner<4;++Corner){
+    Normals.Add(Facing.RotateVector(FVector(0,-1,0)));
+    const FVector Offset=Facing.UnrotateVector(Vertices[Base+Corner]-Center);
+    UVs.Add(FVector2D(.5+Offset.X/(Size*2),.5+Offset.Z/(Size*2)));
+   }
+  }
+  auto* PaintMesh=NewObject<UProceduralMeshComponent>(this);
+  PaintMesh->SetupAttachment(RootComponent);
+  PaintMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+  PaintMesh->SetCastShadow(false);
+  PaintMesh->SetVisibility(!Desert);
+  PaintMesh->RegisterComponent();
+  PaintMesh->CreateMeshSection_LinearColor(0,Vertices,Indices,Normals,UVs,{}, {},false);
+  auto* PaintMaterial=Material(this,Color,false);
+  PaintMaterial->SetScalarParameterValue(TEXT("Roughness"),.95f);
+  PaintMaterial->SetScalarParameterValue(TEXT("Metallic"),0.f);
+  PaintMesh->SetMaterial(0,PaintMaterial);
+  if(Desert)DesertGeometry.Add(PaintMesh);
+ };
+
+ const FLinearColor Pink(.82f,.20f,.34f),Apricot(.94f,.46f,.16f),Mint(.25f,.64f,.42f);
+ if(Desert){
+  // Paint the recessed walls of empty shelf bays in the same frame as each shelf.
+  auto ShelfWall=[](int32 Side,float X,float Z){
+   return FVector(Side*350,30,0)+FRotator(0,-Side*12,0).RotateVector(FVector(X,38,Z));
+  };
+  Paint(Heart,ShelfWall(1,-39,468),28.f,Pink,25,-12.f);
+  Paint(Star,ShelfWall(1,33,476),24.f,Apricot,43,-12.f);
+  Paint(Swirl,ShelfWall(-1,48,173),22.f,Mint,81,12.f);
+ }else{
+  Paint(Heart,FVector(185,236.7,447),31.f,Pink,13);
+  Paint(Star,FVector(-179,236.7,448),32.f,Apricot,31);
+  Paint(Swirl,FVector(214,236.7,330),22.f,Mint,72);
+ }
+}
 void ARescueWorld::BuildRoom(){
  // Warm worn concrete slabs, laid as real floor geometry with narrow recessed seams.
  Box("Cube",FVector(0,0,-20),FVector(1800,1800,32),FLinearColor(.16f,.14f,.115f));
@@ -165,6 +236,8 @@ void ARescueWorld::BeginPlay(){
  Super::BeginPlay();SaveFile=FPaths::ProjectSavedDir()/TEXT("RobotRescueProgress.ini");
  FString Labels[]={"LEFT ARM","RIGHT ARM","LEFT LEG","RIGHT LEG","LARGE GEAR","SMALL GEAR","MOTOR","BATTERY","HEAD"};for(int I=0;I<9;I++)Names[I]=Labels[I];
  BuildRoom();
+ BuildWallDoodles(false);
+ CaptureStandardRoom();
  BuildDisco();
  // Small foil ribbons live in the workshop and pick up its actual lighting.
  const FLinearColor FoilColors[]={FLinearColor(.95f,.59f,.16f),FLinearColor(.82f,.86f,.9f),FLinearColor(.07f,.49f,.53f),FLinearColor(.68f,.25f,.10f)};
@@ -175,7 +248,7 @@ void ARescueWorld::BeginPlay(){
  }
  for(const TCHAR* Name:{TEXT("r.RayTracing"),TEXT("r.RayTracing.Shadows"),TEXT("r.Lumen.HardwareRayTracing")}){auto* V=IConsoleManager::Get().FindConsoleVariable(Name);UE_LOG(LogTemp,Display,TEXT("RR_RENDER %s=%d"),Name,V?V->GetInt():-1);}
 
- HeroComponent(this,RootComponent,TEXT("HeroCableRoll"),RackPosition(FVector(-350,0,123)));
+ if(auto* CableRack=HeroComponent(this,RootComponent,TEXT("HeroCableRoll"),RackPosition(FVector(-350,0,123))))StandardRoomGeometry.Add(CableRack);
  FVector Homes[]={FVector(350,0,395),FVector(-350,0,510),FVector(-390,0,400),FVector(-320,0,400),FVector(369,-10,250),FVector(327,-12,230),FVector(350,-10,123),FVector(-350,0,241),FVector(350,-15,480)};
  FVector Sockets[]={FVector(-103,0,349),FVector(103,0,349),FVector(-43,0,188),FVector(43,0,188),FVector(-28,-58,331),FVector(25,-58,298),FVector(0,-58,271),FVector(0,-57,235),FVector(0,0,463)};
  for(int I=0;I<9;I++){auto* P=GetWorld()->SpawnActor<ARobotPart>();P->Home=RackPosition(Homes[I]);P->Socket=Sockets[I];P->SetActorLocation(P->Home);P->Make(I);Parts.Add(P);}
@@ -225,19 +298,84 @@ void ARescueWorld::Refresh(){
  UpdateMusic();
  if(LeverKnob)LeverKnob->SetMaterial(0,Material(this,FLinearColor(.55f,.018f,.012f),false));
 }
+namespace {
+constexpr float DialogueVolume=1.10f;
+constexpr float DialogueEffectDuck=.36f;
+}
+
 void ARescueWorld::PlayEffect(const FString& Name){
- if(!Effects)return;Effects->SetSound(LoadObject<USoundWave>(nullptr,*(TEXT("/Game/Audio/")+Name+TEXT(".")+Name)));Effects->SetVolumeMultiplier(Quiet?0.f:.85f);Effects->Play();
+ if(!Effects)return;Effects->SetSound(LoadObject<USoundWave>(nullptr,*(TEXT("/Game/Audio/")+Name+TEXT(".")+Name)));Effects->SetVolumeMultiplier(Quiet?0.f:.85f*(Voice&&Voice->IsPlaying()?DialogueEffectDuck:1.f));Effects->Play();
 }
 void ARescueWorld::UpdateReleaseAudio(){
  if(Stage==8&&!YayStarted&&StageTime>=AliveDuration){YayStarted=true;Cheer->SetSound(LoadObject<USoundWave>(nullptr,TEXT("/Game/Audio/Yay.Yay")));Cheer->Play();}
 }
 void ARescueWorld::UpdateMusic(){
  if(!Music)return;
- int Wanted=(Stage==9||(CarMode&&CarReleased&&CarTestTime>=0&&StageTime-CarTestTime<10.f))?1:(Stage==8?2:0);
- if(Wanted!=MusicStage){Music->Stop();MusicStage=Wanted;if(Wanted!=2){const TCHAR* Path=Wanted==1?TEXT("/Game/Audio/PartyDance.PartyDance"):TEXT("/Game/Audio/ScienceMusic.ScienceMusic");Music->SetSound(LoadObject<USoundWave>(nullptr,Path));Music->Play();UE_LOG(LogTemp,Display,TEXT("RR_AUDIO %s"),Wanted==1?TEXT("PartyDance"):TEXT("ScienceMusic"));}}
- Music->SetPaused(Paused);Music->SetVolumeMultiplier(Quiet?0.f:(Voice&&Voice->IsPlaying()?.12f:(Wanted==1?.65f:.28f)));
+ const int Wanted=CarMode?(IsZipDancing()?4:3):(Stage==9?1:(Stage==8?2:(Stage>0?5:0)));
+ if(Wanted!=MusicStage){
+  Music->Stop();
+  MusicStage=Wanted;
+  if(Wanted!=2){
+   const TCHAR* Track=Wanted==4?TEXT("ZipDanceMusic"):(CarMode?TEXT("ZipWorkshopMusic"):(Wanted==1?TEXT("PartyDance"):Wanted==5?TEXT("LevelOneWorkshopMusic"):TEXT("LoadingScreenMusic")));
+   const FString Path=FString::Printf(TEXT("/Game/Audio/%s.%s"),Track,Track);
+   Music->SetSound(LoadObject<USoundWave>(nullptr,*Path));
+   Music->Play();
+   UE_LOG(LogTemp,Display,TEXT("RR_AUDIO %s"),Track);
+  }
+ }
+ const bool Speaking=Voice&&Voice->IsPlaying();
+ const float BaseVolume=Wanted==0?.22f:Wanted==4?.42f:CarMode?.14f:Wanted==1?.65f:.28f;
+ const float Volume=BaseVolume*(Speaking?.26f:1.f);
+ Music->SetPaused(Paused);
+ Music->SetVolumeMultiplier(Quiet?0.f:Volume);
 }
-void ARescueWorld::Say(const FString& S,const FString& Clip){Line=S;VoiceTime=Clock; if(Quiet||Clip.IsEmpty())return;auto* Sound=LoadObject<USoundWave>(nullptr,*(TEXT("/Game/Audio/")+Clip+TEXT(".")+Clip));if(Sound){Voice->SetSound(Sound);Voice->Play();}}
+void ARescueWorld::UpdateAudioMix(){
+ const bool Speaking=Voice&&Voice->IsPlaying();
+ const float EffectScale=Quiet?0.f:(Speaking?DialogueEffectDuck:1.f);
+ UpdateMusic();
+ if(Voice)Voice->SetPaused(Paused);
+ if(Cheer){
+  Cheer->SetPaused(Paused);
+  Cheer->SetVolumeMultiplier(EffectScale);
+ }
+ if(ToneAudio){
+  ToneAudio->SetPaused(Paused);
+  ToneAudio->SetVolumeMultiplier(EffectScale);
+ }
+ if(Effects){
+  Effects->SetPaused(Paused);
+  Effects->SetVolumeMultiplier(.85f*EffectScale);
+ }
+}
+void ARescueWorld::Say(const FString& S,const FString& Clip){
+ const bool AlreadySpeaking=Line==S&&Voice&&Voice->IsPlaying();
+ Line=S;
+ VoiceTime=Clock;
+ if(!Voice||Quiet||Stage==0||AlreadySpeaking)return;
+
+ // Nicknames stay in the caption. These two prompts have a prerecorded spoken version.
+ FString Spoken=S;
+ if(!Nickname.IsEmpty()){
+  if(Clip==TEXT("Online"))Spoken=TEXT("System online! You fixed me! You're an amazing engineer!");
+  if(Clip==TEXT("Free"))Spoken=TEXT("I'm free! Thank you, Engineer!");
+ }
+
+ // Match the stable asset ID produced by the offline dialogue generator.
+ uint32 Id=2166136261u;
+ for(int32 Index=0;Index<Spoken.Len();++Index){
+  Id=(Id^static_cast<uint32>(Spoken[Index]))*16777619u;
+ }
+ const TCHAR* Robot=CarMode?TEXT("Zip"):TEXT("Bolt");
+ const FString Asset=FString::Printf(TEXT("%s_%08X"),Robot,Id);
+ const FString Path=FString::Printf(TEXT("/Game/Audio/RobotVoice/%s.%s"),*Asset,*Asset);
+ Voice->Stop();
+ if(auto* Sound=LoadObject<USoundWave>(nullptr,*Path,nullptr,LOAD_NoWarn|LOAD_Quiet)){
+  Voice->SetSound(Sound);
+  Voice->SetVolumeMultiplier(DialogueVolume);
+  Voice->Play();
+  UpdateAudioMix();
+ }
+}
 void ARescueWorld::Beep(float F){if(Quiet)return;if(F<20)F=700;TArray<int16> PCM;int N=3300;PCM.SetNum(N);for(int I=0;I<N;I++)PCM[I]=(int16)(FMath::Sin(2*PI*F*I/22050)*1600*(1.f-I/(float)N));Tone->QueueAudio((uint8*)PCM.GetData(),N*2);}
 void ARescueWorld::Advance(){Stage++;Selected=-1;WireStart=-1;Failures=0;Refresh();Save();}
 bool ARescueWorld::TryPlace(int32 I,int32 Target){
@@ -427,11 +565,11 @@ void ARescueWorld::UpdateDisco(){
 }
 
 void ARescueWorld::UpdateFinaleFoil(){
- const bool Celebrating=Stage==9&&!Reduced&&(ManualFoilTime>=0||StageTime>=10.5f);
+ const bool Celebrating=Stage==9&&!Reduced&&(ManualFoilTime>=0||StageTime>=BoltDanceSeconds-3.5f);
  for(int I=0;I<FinaleFoil.Num();I++){
   auto* Ribbon=FinaleFoil[I];FRandomStream R(1907+I*97);
   const float Side=I%2?1.f:-1.f;
-  const float BurstTime=ManualFoilTime>=0?ManualFoilTime+(I<40?0.f:.3f):(I<40?10.5f:11.55f);
+  const float BurstTime=ManualFoilTime>=0?ManualFoilTime+(I<40?0.f:.3f):(BoltDanceSeconds-(I<40?3.5f:2.45f));
   const float Age=StageTime-BurstTime-R.FRandRange(0.f,.48f);
   const float OriginX=Side*R.FRandRange(172.f,234.f),OriginY=R.FRandRange(-130.f,50.f);
   const float VX=Side*R.FRandRange(12.f,115.f),VY=R.FRandRange(-75.f,55.f),VZ=R.FRandRange(365.f,575.f);
@@ -448,7 +586,7 @@ void ARescueWorld::UpdateFinaleFoil(){
 void ARescueWorld::UpdateDance(){
  if(Reduced)return;
  const float T=StageTime,Beat=T*(128.f/60.f)*2*PI,Sway=FMath::Sin(Beat*.5f),Step=FMath::Sin(Beat),Hop=FMath::Abs(FMath::Sin(Beat))*9;
- const float Finish=FMath::Max(14.f,DanceMoveUntil);
+ const float Finish=FMath::Max(BoltDanceSeconds,DanceMoveUntil);
  const float MovePhase=DanceMove>=0?FMath::Clamp((T-DanceMoveStart)/1.75f,0.f,1.f):0.f;
  float Fade=FMath::Clamp(T/.45f,0.f,1.f)*FMath::Clamp((Finish-T)/.6f,0.f,1.f);
  FVector Center(0,0,310),Shift(Fade*(Sway*13+(T>10?FMath::Sin(Beat*.25f)*25:0)),0,-27+Hop*Fade);
@@ -483,12 +621,30 @@ int32 ARescueWorld::HitSocket(FVector2D P)const{for(int I=0;I<9;I++)if(Available
 FVector2D ARescueWorld::Terminal(int32 I)const{const FVector2D P[]={FVector2D(775,370),FVector2D(775,535),FVector2D(1200,345),FVector2D(1200,415),FVector2D(1200,495),FVector2D(1200,565)};return P[FMath::Clamp(I,0,5)];}
 int32 ARescueWorld::HitTerminal(FVector2D P)const{for(int I=0;I<6;I++)if(FVector2D::Distance(P,Terminal(I))<34)return I;return -1;}
 static bool In(FVector2D P,float X,float Y,float W,float H){return P.X>=X&&P.X<=X+W&&P.Y>=Y&&P.Y<=Y+H;}
+namespace {
+const FVector2D LevelBackCenter(75, 65);
+const FVector2D LevelSettingsCenter(1525, 65);
+constexpr float LevelControlRadius = 36.f;
+constexpr float LevelControlHitRadius = 40.f;
+}
+
 void ARescueWorld::Click(FVector2D P){
  Mouse=P;
- if(In(P,35,25,80,80)){Settings=!Settings;Paused=Settings;return;}
+ if(Stage>0){
+  if(FVector2D::Distance(P, LevelSettingsCenter)<=LevelControlHitRadius){
+   Settings=!Settings;
+   Paused=Settings;
+   return;
+  }
+  if(!Settings&&FVector2D::Distance(P, LevelBackCenter)<=LevelControlHitRadius){
+   ReturnToMenu();
+   MenuPage=1;
+   return;
+  }
+ }
  if(Settings){if(In(P,570,680,460,48)){ReturnToMenu();return;}if(In(P,570,340,460,50)){Quiet=!Quiet;if(Quiet)Voice->Stop();Save();}if(In(P,570,410,460,50)){Reduced=!Reduced;Save();}if(In(P,570,480,460,50)){Help=!Help;Settings=false;Paused=false;GiveHint();}if(In(P,570,550,460,50)){Settings=false;Paused=false;}if(In(P,570,610,225,48))ChooseChallenge(false);if(In(P,805,610,225,48))ChooseChallenge(true);return;}
  if(Stage==0){if(!Paused)MenuClick(P);return;}
- if(In(P,35,25,120,45)){Paused=!Paused;return;}if(Paused)return;
+ if(Paused)return;
  if(In(P,1240,25,170,45)){Help=!Help;Say(Task);return;}
  if(CarMode){CarClick(P);return;}
  if(ClickWorkshop(P))return;
@@ -603,18 +759,18 @@ void ARescueWorld::Tick(float Dt){
  Super::Tick(Dt);Clock+=Dt;
  if(Stage==0&&MenuPage==2&&!Paused&&Clock>=MenuLoadTime)FinishLevelLoad();
  RecordPen(Mouse);
-UpdateMusic();if(Voice)Voice->SetPaused(Paused);if(Cheer){Cheer->SetPaused(Paused);Cheer->SetVolumeMultiplier(Quiet?0.f:1.f);}if(ToneAudio)ToneAudio->SetPaused(Paused);if(Effects){Effects->SetPaused(Paused);Effects->SetVolumeMultiplier(Quiet?0.f:.85f);}
+ UpdateAudioMix();
  FString ShotPath;if(!ShotTaken&&Clock>3&&FParse::Value(FCommandLine::Get(),TEXT("RRShot="),ShotPath)){FScreenshotRequest::RequestScreenshot(ShotPath,true,false);ShotTaken=true;}
  if(ShotTaken&&Clock>5&&FParse::Param(FCommandLine::Get(),TEXT("RRShotExit")))UGameplayStatics::GetPlayerController(this,0)->ConsoleCommand(TEXT("quit"));
  FString CarCapture;if(FParse::Value(FCommandLine::Get(),TEXT("RRCarCapture="),CarCapture)&&Clock>2){
   if(FXCaptureFrame<0){FXCaptureFrame=0;CarReleased=false;CarReleaseProgress=0;CarTravel=CarTravelTarget=0;ReleaseCar();}
   IFileManager::Get().MakeDirectory(*CarCapture,true);FScreenshotRequest::RequestScreenshot(CarCapture/FString::Printf(TEXT("zip-%04d.png"),FXCaptureFrame),true,false);FXCaptureFrame++;
-  if(FXCaptureFrame>=360)UGameplayStatics::GetPlayerController(this,0)->ConsoleCommand(TEXT("quit"));
+  if(FXCaptureFrame>=int32((ZipCelebrationSeconds+2.f)*30))UGameplayStatics::GetPlayerController(this,0)->ConsoleCommand(TEXT("quit"));
  }
  FString DanceDir;if(FParse::Value(FCommandLine::Get(),TEXT("RRDanceCapture="),DanceDir)&&Clock>2){
   if(FXCaptureFrame<0){FXCaptureFrame=0;Stage=9;Refresh();for(auto* C:Chains)C->SetVisibility(false);}
   IFileManager::Get().MakeDirectory(*DanceDir,true);FScreenshotRequest::RequestScreenshot(DanceDir/FString::Printf(TEXT("dance-%04d.png"),FXCaptureFrame),true,false);FXCaptureFrame++;
-  if(FXCaptureFrame>419)UGameplayStatics::GetPlayerController(this,0)->ConsoleCommand(TEXT("quit"));
+  if(FXCaptureFrame>=int32(BoltDanceSeconds*30))UGameplayStatics::GetPlayerController(this,0)->ConsoleCommand(TEXT("quit"));
  }
  FString CaptureDir;if(FParse::Value(FCommandLine::Get(),TEXT("RRFXCapture="),CaptureDir)&&Clock>2){
   if(FXCaptureFrame<0){FXCaptureFrame=0;AwakenTime=0;Filaments.Empty();PlasmaSpawnClock=0;}
@@ -626,8 +782,8 @@ UpdateMusic();if(Voice)Voice->SetPaused(Paused);if(Cheer){Cheer->SetPaused(Pause
  for(int I=0;I<BodyMeshes.Num();I++){BodyMeshes[I]->SetRelativeLocation(BodyRest[I]+FVector(0,0,Drop));BodyMeshes[I]->SetRelativeRotation(FRotator(0,180,0));}
  for(auto* P:Parts)if(P->Installed)P->SetActorLocation(P->Socket+FVector(0,0,Drop));
  UpdateLever();
- FVector CamPos=CarMode?(CarReleased?FVector(0,-1200,325):FVector(0,-1020,355)):(Stage<=1?FVector(0,-1330,410):(Stage>=2&&Stage<=5?FVector(0,-940,400):FVector(0,-1350,470)));
- FVector Look=CarMode?(CarReleased?FVector(0,0,150):FVector(0,0,270)):(Stage<=1?FVector(0,0,310):(Stage>=2&&Stage<=5?FVector(0,0,310):FVector(0,0,315)));
+ FVector CamPos=CarMode?(CarReleased?FVector(0,-1250,400):FVector(0,-1250,400)):(Stage<=1?FVector(0,-1330,410):(Stage>=2&&Stage<=5?FVector(0,-940,400):FVector(0,-1350,470)));
+ FVector Look=CarMode?(CarReleased?FVector(0,0,260):FVector(0,0,275)):(Stage<=1?FVector(0,0,310):(Stage>=2&&Stage<=5?FVector(0,0,310):FVector(0,0,315)));
  if(Camera){Camera->SetActorLocation(Reduced?CamPos:FMath::VInterpTo(Camera->GetActorLocation(),CamPos,Dt,3));Camera->SetActorRotation((Look-Camera->GetActorLocation()).Rotation());}
  if(Dragging&&Selected>=0)Parts[Selected]->SetActorLocation(World(Mouse));
  if(LeverDrag)Lever=FMath::Clamp((Mouse.Y-LeverStartY)/100.f,0.f,1.f);
@@ -635,7 +791,7 @@ UpdateMusic();if(Voice)Voice->SetPaused(Paused);if(Cheer){Cheer->SetPaused(Pause
  if(Stage==9){
   UpdateDanceControls();
   UpdateDance();
-  if(StageTime>14&&DanceMove<0&&DanceQueue.IsEmpty()&&(ManualFoilTime<0||StageTime>=ManualFoilTime+2.35f))Complete();
+  if(StageTime>=BoltDanceSeconds&&DanceMove<0&&DanceQueue.IsEmpty()&&(ManualFoilTime<0||StageTime>=ManualFoilTime+2.35f))Complete();
  }
  UpdateDisco();
  UpdateFinaleFoil();
@@ -662,25 +818,57 @@ void ARescueHUD::Rect(float X,float Y,float Width,float Height,FLinearColor C){D
 void ARescueHUD::Text(FString S,float X,float Y,float Size,FLinearColor C){UFont* Font=GEngine->GetMediumFont();DrawText(S,C,OX+X*Scale,OY+Y*Scale,Font,Size/12.f*Scale,false);}
 void ARescueHUD::Stroke(FVector2D A,FVector2D B,FLinearColor C,float T){DrawLine(OX+A.X*Scale,OY+A.Y*Scale,OX+B.X*Scale,OY+B.Y*Scale,C,T*Scale);}
 void ARescueHUD::Ring(FVector2D P,float R,FLinearColor C,float T){for(int I=0;I<40;I++){float A=I*2*PI/40,B=(I+1)*2*PI/40;Stroke(P+FVector2D(FMath::Cos(A),FMath::Sin(A))*R,P+FVector2D(FMath::Cos(B),FMath::Sin(B))*R,C,T);}}
-void ARescueHUD::Button(FString Label,float X,float Y,float Width,bool Active){
- bool Hover=W&&In(W->Mouse,X,Y,Width,48);bool Red=Label.Contains(TEXT("RED +")),Black=Label.Contains(TEXT("BLACK -")),Test=Label==TEXT("TEST CIRCUIT"),Send=Label==TEXT("SEND TO ROBOT");
- FLinearColor Face=Red?FLinearColor(.60f,.025f,.015f):(Black?FLinearColor(.012f,.014f,.018f):(Send?FLinearColor(.008f,.20f,.33f):FLinearColor(.07f,.105f,.12f)));
- FLinearColor Rim=Send?FLinearColor(.03f,.8f,1.f):(Red?FLinearColor(1.f,.20f,.10f):FLinearColor(.40f,.48f,.51f));
- auto Round=[&](float PX,float PY,float PW,float PH,float R,FLinearColor C){for(int I=0;I<FMath::CeilToInt(PH);I++){float DY=FMath::Max(0.f,FMath::Abs(I-PH*.5f)-(PH*.5f-R));float Inset=DY>0?R-FMath::Sqrt(FMath::Max(0.f,R*R-DY*DY)):0;Rect(PX+Inset,PY+I,PW-Inset*2,1.2f,C);}};
- auto Disk=[&](FVector2D P,float R,FLinearColor C){Round(P.X-R,P.Y-R,R*2,R*2,R,C);};
- if(Send){for(int I=8;I>0;I-=2)Round(X-I,Y-I,Width+I*2,48+I*2,10+I,FLinearColor(.01f,.65f,1.f,(Active?.045f:.018f)));}
- Round(X,Y+5,Width,48,8,FLinearColor(0,0,0,.75f));Round(X,Y,Width,48,8,Rim);Round(X+2,Y+2,Width-4,44,6,FLinearColor(.015f,.022f,.025f));
- for(int I=0;I<39;I++){float Gain=1.25f-I*.013f+(Hover?.20f:0.f);float Inset=I<4?5-I*.5f:3;Rect(X+Inset,Y+4+I,Width-Inset*2,1.2f,Face*Gain);}
- Stroke(FVector2D(X+9,Y+4),FVector2D(X+Width-9,Y+4),FLinearColor(1,1,1,.24f),1);
- Stroke(FVector2D(X+8,Y+43),FVector2D(X+Width-8,Y+43),FLinearColor(0,0,0,.6f),2);
- if(Test){FVector2D P(X+29,Y+24);Disk(P+FVector2D(0,3),27,FLinearColor(0,0,0,.8f));Disk(P,27,FLinearColor(.28f,.30f,.31f));Disk(P,25,FLinearColor(.87f,.91f,.92f));Disk(P,22,FLinearColor(.35f,.006f,.004f));
-  for(int I=0;I<40;I++){float DY=I-20.f,Half=FMath::Sqrt(FMath::Max(0.f,400-DY*DY));Rect(P.X-Half,P.Y+DY,Half*2,1.2f,FLinearColor(.94f-I*.009f,.025f,.016f));}
-  Round(P.X-13,P.Y-16,26,9,4,FLinearColor(1,.8f,.75f,.5f));Text(TEXT("TEST"),P.X-16,P.Y-6,11,White);Text(TEXT("CIRCUIT"),X+66,Y+15,16,White);return;
+void ARescueHUD::ButtonSurface(float X,float Y,float Width,float Height,float Radius,FLinearColor Face,bool Active,bool Hover,bool Glow){
+ const FLinearColor Edge(.19f,.063f,.023f);
+ const FLinearColor GoldTop(1.f,.76f,.33f);
+ const FLinearColor GoldBottom(.68f,.32f,.055f);
+ auto Rounded=[&](float Inset,float Offset,float R,FLinearColor Top,FLinearColor Bottom){
+  const float H=Height-2*Inset;
+  for(int Row=0;Row<FMath::CeilToInt(H);Row++){
+   const float T=(Row+.5f)/H;
+   const float DY=FMath::Max(0.f,FMath::Abs(Row+.5f-H*.5f)-(H*.5f-R));
+   const float Corner=R-FMath::Sqrt(FMath::Max(0.f,R*R-DY*DY));
+   Rect(X+Inset+Corner,Y+Inset+Offset+Row,Width-2*(Inset+Corner),1.12f,FMath::Lerp(Top,Bottom,T));
+  }
+ };
+ if(Glow){
+  const FLinearColor Halo(.025f,.78f,1.f,Active?.19f:.07f);
+  Rounded(-3,0,Radius+3,Halo,Halo);
  }
- if(Red||Black){Ring(FVector2D(X+21,Y+24),7,Red?FLinearColor(1,.4f,.25f):Silver,2);}
- float Size=FMath::Min(16.f,(Width-(Red||Black?49:24))/(FMath::Max(1,Label.Len())*.58f));float TX=X+(Red||Black?38:14);
- Text(Label,TX,Y+15,Size,Send&&!Active?FLinearColor(.48f,.69f,.75f):White);
- if(Send&&Active){Ring(FVector2D(X+Width-17,Y+24),4,Cyan,3);}
+ Rounded(0,4,Radius,FLinearColor(0,0,0,.56f),FLinearColor(0,0,0,.36f));
+ Rounded(0,0,Radius,Edge,Edge);
+ Rounded(2.5f,0,Radius-2.5f,GoldTop,GoldBottom);
+ Rounded(5.5f,0,Radius-5.5f,Edge,Edge);
+ const float Brightness=Active?(Hover?1.16f:1.f):.64f;
+ const FLinearColor Top=FMath::Lerp(Face*Brightness,FLinearColor::White,.16f);
+ const FLinearColor Bottom=Face*(Brightness*.67f);
+ Rounded(7,0,Radius-7,Top,Bottom);
+ Stroke({X+Radius,Y+9},{X+Width-Radius,Y+9},FLinearColor(1,1,1,.37f),1.5f);
+}
+
+void ARescueHUD::Button(FString Label,float X,float Y,float Width,bool Active){
+ const bool Hover=W&&In(W->Mouse,X,Y,Width,48);
+ const bool Red=Label.Contains(TEXT("RED +"))||Label==TEXT("TEST CIRCUIT");
+ const bool Black=Label.Contains(TEXT("BLACK -"));
+ const bool Send=Label==TEXT("SEND TO ROBOT");
+ FLinearColor Face(.34f,.67f,.025f);
+ if(Red)Face=FLinearColor(.82f,.055f,.034f);
+ if(Black)Face=FLinearColor(.017f,.019f,.025f);
+ if(Send)Face=FLinearColor(.025f,.57f,.95f);
+ ButtonSurface(X,Y,Width,48,15,Face,Active,Hover,Send);
+
+ UFont* Font=GEngine->GetMediumFont();
+ float TextWidth,TextHeight;
+ GetTextSize(Label,TextWidth,TextHeight,Font);
+ const float FontScale=FMath::Min3(1.9f,(Width-24)/FMath::Max(1.f,TextWidth),27.f/FMath::Max(1.f,TextHeight));
+ const FVector2D Position(OX+(X+(Width-TextWidth*FontScale)*.5f)*Scale,
+                         OY+(Y+(48-TextHeight*FontScale)*.5f)*Scale);
+ FCanvasTextItem Caption(Position,FText::FromString(Label),Font,White);
+ Caption.Scale=FVector2D(FontScale*Scale);
+ Caption.bOutlined=true;
+ Caption.OutlineColor=FLinearColor(.13f,.047f,.018f);
+ Caption.EnableShadow(FLinearColor(0,0,0,.58f),FVector2D(1,2)*Scale);
+ Canvas->DrawItem(Caption);
 }
 
 void ARescueHUD::Cable(FVector2D A,FVector2D B,FLinearColor C){
@@ -722,15 +910,82 @@ void ARescueHUD::DrawAwakening(){
  // Electricity is rendered in the 3D scene with emissive filaments and real bloom.
 }
 
+void ARescueHUD::DrawDialogue(){
+ const bool Zip=W->CarMode;
+ const FLinearColor Panel(.019f,.019f,.024f,.96f);
+ const FLinearColor Frame(.28f,.29f,.34f);
+ const FLinearColor Accent=Zip?Gold:Cyan;
+ Rect(98,814,1404,76,Panel);
+ Rect(98,814,1404,2,Frame);
+ Rect(98,888,1404,2,Frame);
+ Rect(110,781,110,100,Frame);
+ Rect(113,784,104,94,Dark);
+
+ const TCHAR* PortraitPath=Zip?TEXT("/Game/UI/ZipDialoguePortrait.ZipDialoguePortrait"):TEXT("/Game/UI/BoltDialoguePortrait.BoltDialoguePortrait");
+ if(auto* Portrait=LoadObject<UTexture2D>(nullptr,PortraitPath)){
+  // Both portraits use a close-up of the actual robot from the game.
+  const FVector2D CropOrigin=Zip?FVector2D(512,371):FVector2D(558,136);
+  const float CropSize=Zip?232.f:165.f;
+  DrawTexture(Portrait,OX+113*Scale,OY+784*Scale,104*Scale,94*Scale,
+              CropOrigin.X/1280.f,CropOrigin.Y/720.f,CropSize/1280.f,CropSize/720.f,
+              FLinearColor::White,BLEND_Opaque);
+ }
+ Rect(101,862,128,28,Frame);
+ Rect(101,862,128,2,Accent);
+ const FString Name=Zip?TEXT("ZIP"):TEXT("BOLT");
+ float NameWidth,NameHeight;
+ GetTextSize(Name,NameWidth,NameHeight,GEngine->GetMediumFont(),1.5f);
+ Text(Name,165-NameWidth*.5f,865,18,White);
+
+ const FString Dialogue=W->Line.IsEmpty()?W->Task:W->Line;
+ TArray<FString> Words;
+ Dialogue.ParseIntoArrayWS(Words);
+ FString Row;
+ float RowY=823;
+ for(const FString& Word:Words){
+  const FString Candidate=Row.IsEmpty()?Word:Row+TEXT(" ")+Word;
+  float Width,Height;
+  GetTextSize(Candidate,Width,Height,GEngine->GetMediumFont(),19.f/12.f);
+  if(Width>1230.f&&!Row.IsEmpty()){
+   Text(Row,244,RowY,19,White);
+   Row=Word;
+   RowY+=21;
+  }else{
+   Row=Candidate;
+  }
+ }
+ if(!Row.IsEmpty())Text(Row,244,RowY,19,White);
+}
+
 void ARescueHUD::DrawHUD(){
  Super::DrawHUD();if(!W)for(TActorIterator<ARescueWorld> It(GetWorld());It;++It){W=*It;break;}if(!W||!W->Parts.Num())return;
  Scale=FMath::Min(Canvas->SizeX/1600.f,Canvas->SizeY/900.f);OX=(Canvas->SizeX-1600*Scale)/2;OY=(Canvas->SizeY-900*Scale)/2;
  auto* PC=Cast<ARescueController>(PlayerOwner);if(PC&&!PC->Touching){W->Mouse=PC->Pointer();}
  W->RecordPen(W->Mouse);
  DrawAwakening();
- Rect(35,25,80,80,FLinearColor(.01f,.025f,.035f,.9f));for(int E=0;E<4;E++){FVector2D A(35+(E==1||E==2?80:0),25+(E>=2?80:0)),B(35+(E==0||E==1?80:0),25+(E==1||E==2?80:0));Stroke(A,B,Silver,2);}
- FVector2D Gear(75,65);Ring(Gear,19,Gold,7);Ring(Gear,8,Gold,3);for(int I=0;I<8;I++){float A=I*PI/4;Stroke(Gear+FVector2D(FMath::Cos(A),FMath::Sin(A))*20,Gear+FVector2D(FMath::Cos(A),FMath::Sin(A))*28,Gold,9);}
- Button(W->CarMode?TEXT("LEVEL 2"):TEXT("LEVEL 1"),1440,25,125);
+ // Every playable level uses the same navigation, regardless of its gameplay mode.
+ if(W->Stage>0){
+  const FLinearColor NavigationFace(.34f,.67f,.025f);
+  const float Diameter=LevelControlRadius*2;
+  ButtonSurface(LevelBackCenter.X-LevelControlRadius,LevelBackCenter.Y-LevelControlRadius,
+                Diameter,Diameter,LevelControlRadius,NavigationFace,true,
+                FVector2D::Distance(W->Mouse,LevelBackCenter)<=LevelControlHitRadius);
+  const FVector2D ArrowTip=LevelBackCenter+FVector2D(-20,0);
+  Stroke(LevelBackCenter+FVector2D(18,0),ArrowTip,White,6);
+  Stroke(ArrowTip,LevelBackCenter+FVector2D(-6,-15),White,6);
+  Stroke(ArrowTip,LevelBackCenter+FVector2D(-6,15),White,6);
+
+  ButtonSurface(LevelSettingsCenter.X-LevelControlRadius,LevelSettingsCenter.Y-LevelControlRadius,
+                Diameter,Diameter,LevelControlRadius,NavigationFace,true,
+                FVector2D::Distance(W->Mouse,LevelSettingsCenter)<=LevelControlHitRadius);
+  Ring(LevelSettingsCenter,16,White,6);
+  for(int I=0;I<8;I++){
+   const float Angle=I*PI/4;
+   const FVector2D Direction(FMath::Cos(Angle),FMath::Sin(Angle));
+   Stroke(LevelSettingsCenter+Direction*18,LevelSettingsCenter+Direction*25,White,6);
+  }
+  if(!W->CarMode)Button(TEXT("LEVEL 1"),1355,25,125);
+ }
  if(W->Stage==0){DrawMainMenu(); }else{
   if(W->Stage>0&&W->Stage<7&&W->Stage!=5){for(int I=0;I<9;I++)if(W->Available(I)){
    FVector2D P=W->Screen(W->Parts[I]->Socket);bool Match=W->Selected==I;bool Hover=FVector2D::Distance(W->Mouse,P)<60;Ring(P,I<4?26:32,Match?(Hover?Green:Cyan):(Hover&&W->Selected>=0?Gold:FLinearColor(.2f,.48f,.55f,.8f)),Match?3:1);
@@ -798,8 +1053,8 @@ void ARescueHUD::DrawHUD(){
    Rect(630,675,340,78,FLinearColor(.01f,.03f,.04f,.94f));
    Text(FString::Printf(TEXT("SYSTEMS WAKE IN  %d"),W->PowerCount),665,699,23,Gold);
   }
-  if(W->Stage<10||W->CarMode){Rect(250,816,1100,56,FLinearColor(.008f,.022f,.032f,.72f));FString Display=W->Line.IsEmpty()?W->Task:W->Line;Text(Display,275,834,Display.Len()>100?15:18,White);}
   if(W->Stage==10){if(W->CarMode&&!W->CarWiring)DrawCarLevel();else if(!W->CarMode)DrawWorkshop();}
+  DrawDialogue();
  }
  if(W->Help&&W->Stage>0&&W->Stage<8&&W->Stage!=5){Rect(45,265,380,140,FLinearColor(.015f,.05f,.067f,.98f));Text(TEXT("ENGINEER'S HINT"),65,282,20,Cyan);Text(TEXT("Match the outline and the symbols."),65,325,16,White);Text(TEXT("Tab: choose. Enter: place or connect."),65,353,15,Silver);if(W->Stage==5)Text(TEXT("1: red +    2: black -"),65,379,15,Gold);}
  if(W->Paused&&!W->Settings){Rect(500,325,600,220,FLinearColor(.008f,.023f,.035f,.98f));Text(TEXT("WORKSHOP PAUSED"),560,375,32,White);Text(TEXT("Press Escape or RESUME to continue."),575,450,19,Cyan);}
@@ -810,7 +1065,7 @@ void ARescueWorld::RunTests(){
  TArray<FString> Checks;bool All=true;
  auto Check=[&](bool OK,const FString& Name){Checks.Add(FString::Printf(TEXT("    {\"name\":\"%s\",\"passed\":%s}"),*Name,OK?TEXT("true"):TEXT("false")));All&=OK;};
  Stage=1;for(auto* P:Parts)P->Installed=false;Red=Black=false;FirstClear=false;XP=0;Refresh();
- Click(FVector2D(75,65));Check(Settings&&Paused,TEXT("reference_gear_opens_settings_and_pauses"));Click(FVector2D(700,500));Check(Help&&!Settings&&!Paused,TEXT("guidance_remains_accessible_from_settings"));Help=false;
+ Click(LevelSettingsCenter);Check(Settings&&Paused,TEXT("reference_gear_opens_settings_and_pauses"));Click(FVector2D(700,500));Check(Help&&!Settings&&!Paused,TEXT("guidance_remains_accessible_from_settings"));Help=false;
  Check(!TryPlace(0,1)&&!Parts[0]->Installed,TEXT("wrong_limb_rejected"));Release();Check(Stage==1,TEXT("early_lever_blocked"));
  TryPlace(1,1);Check(Effects->Sound&&Effects->Sound->GetName()==TEXT("LimbMechanism"),TEXT("successful_limb_plays_mechanism"));TryPlace(0,0);TryPlace(3,3);TryPlace(2,2);Check(Stage==2,TEXT("limbs_any_order_open_chest"));
  Check(!Available(8),TEXT("head_locked_until_wiring"));Check(!TryPlace(4,5),TEXT("wrong_gear_size_rejected"));TryPlace(4,4);Check(Effects->Sound&&Effects->Sound->GetName()==TEXT("GearAttach"),TEXT("gear_attachment_plays_user_audio"));TryPlace(5,5);Check(Stage==3,TEXT("gear_pair_stage_gate"));TryPlace(6,6);Check(Stage==4,TEXT("motor_stage_gate"));
@@ -831,12 +1086,12 @@ void ARescueWorld::RunTests(){
  Click(Terminal(1));Up(Terminal(1));Click(Terminal(4));Up(Terminal(4));Check(TrackStart[2]==1&&TrackEnd[2]==4&&WireColor==1,TEXT("pointer_black_tap_autoselects_and_connects"));
  for(int C=0;C<4;C++){WireColor=C<2?0:1;WireStart=C<2?0:1;PenPoints.Empty();FinishTrack(C+2);}Check(!Red&&!Black&&Stage==5,TEXT("monitor_drawing_does_not_power_robot"));
  FVector2D Hit;Check(!TrackCollision(Hit),TEXT("four_separate_tracks_are_safe"));auto Safe=Tracks[1];Tracks[1]={FVector2D(1000,350),FVector2D(1100,390)};Tracks[0]={FVector2D(1000,390),FVector2D(1100,350)};TestCircuit();Check(TracksTouch&&!CircuitPassed,TEXT("crossing_tracks_block_test"));Tracks[1]={FVector2D(1000,356),FVector2D(1100,356)};Tracks[0]={FVector2D(1000,350),FVector2D(1100,350)};TestCircuit();Check(TracksTouch&&!CircuitPassed,TEXT("near_touching_tracks_block_test"));Tracks[1]=Safe;Tracks[0]={Terminal(0),Terminal(2)};TestCircuit();SendCircuit();Check(Stage==5&&CircuitPassed,TEXT("monitor_send_waits_for_test_pulse"));StageTime+=2.5f;SendCircuit();Check(Stage==6&&Red&&Black,TEXT("monitor_send_powers_robot_after_test"));TryPlace(8,8);Release();Complete();Check(XP==100,TEXT("full_replay_no_duplicate_xp"));
- Check(LoadObject<USoundWave>(nullptr,TEXT("/Game/Audio/ScienceMusic.ScienceMusic"))&&LoadObject<USoundWave>(nullptr,TEXT("/Game/Audio/Yay.Yay"))&&LoadObject<USoundWave>(nullptr,TEXT("/Game/Audio/PartyDance.PartyDance")),TEXT("all_user_audio_assets_load"));
+ Check(LoadObject<USoundWave>(nullptr,TEXT("/Game/Audio/LevelOneWorkshopMusic.LevelOneWorkshopMusic"))&&LoadObject<USoundWave>(nullptr,TEXT("/Game/Audio/Yay.Yay"))&&LoadObject<USoundWave>(nullptr,TEXT("/Game/Audio/PartyDance.PartyDance")),TEXT("all_user_audio_assets_load"));
  Stage=9;Refresh();Check(MusicStage==1&&Music->Sound&&Music->Sound->GetName()==TEXT("PartyDance"),TEXT("dance_uses_party_music"));
  bool WasReduced=Reduced;Reduced=false;StageTime=1;UpdateDance();auto Riding=Parts[1]->GetActorRotation();auto HeadA=Parts[8]->GetActorLocation();StageTime=7;UpdateDance();Check(!Parts[1]->GetActorRotation().Equals(Riding,10.f),TEXT("dance_lasso_differs_from_riding"));StageTime=1.2f;UpdateDance();Check(FVector::Distance(HeadA,Parts[8]->GetActorLocation())>1,TEXT("dance_moves_whole_robot"));Reduced=true;auto Still=Parts[1]->GetActorTransform();StageTime=8;UpdateDance();Check(Parts[1]->GetActorTransform().Equals(Still),TEXT("reduced_motion_suppresses_dance"));Reduced=WasReduced;
 
  Stage=8;Refresh();Check(MusicStage==2&&!Music->IsPlaying(),TEXT("release_stops_background_for_cheer"));
- Stage=10;Refresh();Check(MusicStage==0&&Music->Sound&&Music->Sound->GetName()==TEXT("ScienceMusic"),TEXT("background_resumes_after_dance"));
+ Stage=10;Refresh();Check(MusicStage==5&&Music->Sound&&Music->Sound->GetName()==TEXT("LevelOneWorkshopMusic"),TEXT("background_resumes_after_dance"));
  TestSaving=true;SaveFile=FPaths::ProjectSavedDir()/TEXT("RobotRescueTestProgress.ini");
  Stage=8;Nickname=TEXT("TEST ENGINEER");Reduced=true;Save();Stage=1;for(auto* P:Parts)P->Installed=false;Red=Black=false;Load();
  Check(Stage==7&&Ready()&&XP==100,TEXT("interrupted_release_resumes_ready_without_duplicate_xp"));
@@ -882,11 +1137,17 @@ void ARescueWorld::RunTests(){
  TestSaving=true;Save();CarInstalled=0;CarComplete=false;Load();TestSaving=false;
  Check(CarComplete&&(CarInstalled&31)==31,TEXT("car_progress_survives_reload"));
  CarKey(EKeys::R);Check(!CarComplete&&CarInstalled==0,TEXT("car_replay_resets_only_car_progress"));
- CarClick({100,780});Check(!CarMode&&Stage==0&&MenuPage==1,TEXT("car_returns_to_level_selection"));
+ Click(LevelBackCenter);Check(!CarMode&&Stage==0&&MenuPage==1,TEXT("car_returns_to_level_selection"));
  Stage=0;FirstClear=false;MenuPage=1;RequestLevel(2);
  Check(!CarMode&&MenuPage==1&&PendingLevel==0,TEXT("level_two_locked_until_level_one_clear"));
- FirstClear=true;RequestLevel(2);Check(Stage==0&&MenuPage==2,TEXT("level_selection_shows_loading_screen"));FinishLevelLoad();
+ FirstClear=true;RequestLevel(2);Check(Stage==0&&MenuPage==2,TEXT("level_selection_shows_loading_screen"));
+ UpdateMusic();
+ Check(MusicStage==0&&Music->Sound&&Music->Sound->GetName()==TEXT("LoadingScreenMusic"),TEXT("loading_screen_uses_running_on_waves"));
+ FinishLevelLoad();
  Check(CarMode&&CarReturnStage==0&&CarInstalled==0&&!CarReleased,TEXT("unlocked_level_two_starts_fresh"));
+ Check(Voice->Sound&&Voice->Sound->GetName().StartsWith(TEXT("Zip_")),TEXT("zip_uses_its_prerecorded_robot_voice"));
+ Check(DesertActive&&DesertGeometry.Num()>=7&&DesertGeometry[0]->IsVisible()&&!StandardRoomGeometry[0]->IsVisible(),TEXT("level_two_uses_separate_desert_environment"));
+ Check(CarBody[0]->GetStaticMesh()->GetName()==TEXT("ZipRuggedBody")&&CarWheels[0]->GetStaticMesh()->GetName()==TEXT("ZipRuggedTire"),TEXT("rugged_zip_body_and_treaded_tyres_loaded"));
  CarClick(Screen(FVector(350,0,360)));Up({800,100});
  Check(CarInstalled==0&&!CarPartDrag,TEXT("car_wrong_drop_returns_tyre_to_rack"));
  CarClick(Screen(FVector(350,0,360)));Up(Screen(FVector(-127,-12,198)));
@@ -912,11 +1173,13 @@ void ARescueWorld::RunTests(){
  const bool SavedReduced=Reduced;Reduced=false;TickCar(1.f);Check(CarReleaseProgress>.45f&&CarReleaseProgress<.55f,TEXT("hydraulic_lowering_has_midpoint"));
  StageTime=CarTestTime+2.7f;TickCar(1.f);UpdateCarLevel();
  Check(CarReleaseProgress==1.f&&CarWheelieAngle>20&&CarCelebrationCue>=1,TEXT("car_celebration_wheelie_starts_after_lowering"));
- StageTime=CarTestTime+10.1f;TickCar(.1f);Check(CarTestTime<0&&CarWheelieAngle==0,TEXT("car_celebration_finishes_and_returns_to_driving"));Reduced=SavedReduced;
+ StageTime=CarTestTime+10.1f;TickCar(.1f);
+ Check(IsZipDancing(),TEXT("zip_dance_continues_past_previous_end"));
+ StageTime=CarTestTime+ZipCelebrationSeconds+.1f;TickCar(.1f);Check(CarTestTime<0&&CarWheelieAngle==0,TEXT("car_celebration_finishes_and_returns_to_driving"));Reduced=SavedReduced;
  CarClick({100,365});Check(CarTravelTarget>0,TEXT("stacked_left_forward_button_drives"));
  const int PreviousPaint=CarPaintIndex;CarKey(EKeys::P);CarKey(EKeys::B);
  Check(CarPaintIndex!=PreviousPaint&&!CarLampOn,TEXT("car_paint_and_headlight_controls_work"));
- CarClick({100,780});
+ Click(LevelBackCenter);
  Check(!CarMode&&Stage==0&&FirstClear,TEXT("return_to_menu_preserves_level_unlocks"));
  CarInstalled=31;CarReleased=true;CarHead=true;CarEverComplete=true;const int SavedCarPaint=CarPaintIndex;
  RequestLevel(2);FinishLevelLoad();Check(CarMode&&CarInstalled==0&&!CarHead&&!CarReleased&&CarPaintIndex==SavedCarPaint&&CarEverComplete,TEXT("replayed_car_level_resets_repair_preserves_style_and_completion"));
@@ -924,6 +1187,11 @@ void ARescueWorld::RunTests(){
  MenuClick({800,720});Check(MenuPage==1,TEXT("main_menu_play_opens_level_selector"));RequestLevel(1);FinishLevelLoad();
  bool EmptyParts=true;for(auto* P:Parts)EmptyParts&=!P->Installed;
  Check(Stage==1&&!CarMode&&EmptyParts&&FirstClear,TEXT("selected_level_one_starts_at_first_repair"));
+ Check(Voice->Sound&&Voice->Sound->GetName().StartsWith(TEXT("Bolt_")),TEXT("bolt_uses_its_prerecorded_robot_voice"));
+ Check(!DesertActive&&StandardRoomGeometry[0]->IsVisible()&&!DesertGeometry[0]->IsVisible(),TEXT("returning_to_level_one_restores_original_workshop"));
+ Click(LevelBackCenter);
+ Check(Stage==0&&MenuPage==1&&FirstClear,TEXT("level_one_back_arrow_returns_to_selector"));
+ RequestLevel(1);FinishLevelLoad();
  TestSaving=true;Save();FirstClear=false;CarEverComplete=false;Load();TestSaving=false;
  Check(FirstClear&&CarEverComplete,TEXT("level_unlocks_and_completion_survive_save_reload"));
  FString JSON=TEXT("{\n  \"suite\":\"Robot Rescue Level 1 runtime\",\n  \"passed\":")+(All?FString(TEXT("true")):FString(TEXT("false")))+TEXT(",\n  \"checks\":[\n")+FString::Join(Checks,TEXT(",\n"))+TEXT("\n  ]\n}\n");
